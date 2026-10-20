@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Live Scoreboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@600;700&display=swap">
+<style>
+/* Layout: toolbar row above a responsive grid of team cards; big tabular score is the focal point of each card. */
+:root {
+  --bg: #f2f5f8;
+  --surface: #ffffff;
+  --fg: #12171d;
+  --muted: #5b6672;
+  --line: #dce2e9;
+  --chip: #e7ecf1;
+  --accent: #12171d;
+  --accent-fg: #ffffff;
+  --display: 'Barlow Condensed', 'Arial Narrow', 'Helvetica Neue', sans-serif;
+  --body: 'Barlow', system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1216; --surface: #161b21; --fg: #edf0f3; --muted: #97a2ae;
+    --line: #27303a; --chip: #1f2730; --accent: #edf0f3; --accent-fg: #0e1216;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1216; --surface: #161b21; --fg: #edf0f3; --muted: #97a2ae;
+  --line: #27303a; --chip: #1f2730; --accent: #edf0f3; --accent-fg: #0e1216;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font: 400 15px/1.4 var(--body);
+  padding-block: 24px 40px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap { max-width: 1040px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+button, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+
+/* Header */
+.top { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 16px; }
+h1 { margin: 0; font: 700 34px/1 var(--display); letter-spacing: .02em; text-transform: uppercase; text-wrap: balance; }
+.totals { color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* Toolbar */
+.bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
+.group { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.label { font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.tool { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; height: 38px; padding: 0 14px; font-weight: 500; }
+.tool[aria-pressed="true"] { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+.tool:disabled { opacity: .45; cursor: default; }
+.tool.danger-armed { border-color: #c0392b; color: #c0392b; }
+.spacer { flex: 1; }
+
+/* Grid */
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: 14px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 14px 10px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.head { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.swatch { width: 16px; height: 16px; border-radius: 50%; background: var(--team); border: 0; padding: 0; flex: none; }
+.name { flex: 1; min-width: 0; font: 600 18px/1.2 var(--body); background: transparent; border: 1px solid transparent; border-radius: 6px; padding: 5px 6px; margin-left: -6px; text-overflow: ellipsis; }
+.name:hover { border-color: var(--line); }
+.name:focus { outline: none; border-color: var(--muted); }
+.pill { flex: none; font-size: 11px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; padding: 3px 8px; border-radius: 999px; background: var(--chip); color: var(--muted); }
+.pill.lead { background: var(--team); color: #fff; }
+.rank { flex: none; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.score { font: 700 92px/1 var(--display); text-align: center; font-variant-numeric: tabular-nums; letter-spacing: -.01em; padding: 4px 0 2px; }
+.score.bump { animation: bump .2s ease-out; }
+@keyframes bump { 40% { transform: scale(1.07); } }
+@media (prefers-reduced-motion: reduce) { .score.bump { animation: none; } }
+.controls { display: grid; grid-template-columns: 1fr 2fr; gap: 8px; }
+.controls button { height: 52px; border-radius: 8px; font: 700 22px var(--display); letter-spacing: .03em; border: 1px solid var(--line); background: var(--surface); font-variant-numeric: tabular-nums; }
+.controls .plus { background: var(--team); border-color: var(--team); color: #fff; }
+.controls button:active { transform: translateY(1px); }
+.foot { display: flex; justify-content: space-between; }
+.link { background: none; border: 0; color: var(--muted); font-size: 13px; font-weight: 500; padding: 6px 2px; }
+.link:hover { color: var(--fg); }
+.link.armed { color: #c0392b; }
+
+/* Add form */
+.add { display: flex; gap: 8px; flex-wrap: wrap; }
+.add input { flex: 1 1 200px; min-width: 0; height: 42px; border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 0 12px; }
+.add input::placeholder { color: var(--muted); }
+.add button { height: 42px; padding: 0 20px; border: 0; border-radius: 8px; background: var(--accent); color: var(--accent-fg); font-weight: 600; }
+.add button:disabled { opacity: .45; cursor: default; }
+.empty { border: 1px dashed var(--line); border-radius: 10px; padding: 36px 16px; text-align: center; color: var(--muted); }
+</style>
+
+<style>body{margin:0}</style>
+</head>
+<body>
+<main class="wrap">
+  <header class="top">
+    <h1>Scoreboard</h1>
+    <div class="totals" id="totals" aria-live="polite"></div>
+  </header>
+
+  <div class="bar">
+    <button class="tool" id="sortBtn" type="button" aria-pressed="true">Rank order</button>
+    <span class="spacer"></span>
+    <button class="tool" id="undoBtn" type="button">Undo</button>
+    <button class="tool" id="resetAllBtn" type="button">Reset all</button>
+  </div>
+
+  <section class="grid" id="grid" aria-label="Teams"></section>
+
+  <form class="add" id="addForm">
+    <input id="newName" type="text" placeholder="New team name" maxlength="28" autocomplete="off" aria-label="New team name">
+    <button id="addBtn" type="submit">Add team</button>
+  </form>
+</main>
+
+<script>
+(function () {
+  var KEY = 'scoreboard.v1';
+  var MAX_TEAMS = 12;
+  var COLORS = ['#d24a3a', '#2f78cc', '#26946a', '#b9771c', '#8454d0', '#d0447f', '#1c909d', '#5f6b78'];
+
+  function seed() {
+    return {
+      sort: true,
+      teams: [
+        { id: 't1', name: 'Falcons', score: 14, color: 0 },
+        { id: 't2', name: 'Otters', score: 11, color: 1 },
+        { id: 't3', name: 'Comets', score: 11, color: 2 },
+        { id: 't4', name: 'Badgers', score: 6, color: 3 }
+      ]
+    };
+  }
+  function load() {
+    try {
+      var s = JSON.parse(localStorage.getItem(KEY));
+      if (s && Array.isArray(s.teams)) return s;
+    } catch (e) {}
+    return null;
+  }
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} }
+
+  var state = load() || seed();
+  var history = [];
+  var lastChanged = null;
+  var pendingRemove = null, pendingReset = false, timer = null;
+
+  var grid = document.getElementById('grid');
+  var totalsEl = document.getElementById('totals');
+  var sortBtn = document.getElementById('sortBtn');
+  var undoBtn = document.getElementById('undoBtn');
+  var resetAllBtn = document.getElementById('resetAllBtn');
+  var addForm = document.getElementById('addForm');
+  var newName = document.getElementById('newName');
+  var addBtn = document.getElementById('addBtn');
+
+  function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function snap() { history.push(JSON.stringify(state.teams)); if (history.length > 100) history.shift(); }
+  function armTimeout() { clearTimeout(timer); timer = setTimeout(function () { pendingRemove = null; pendingReset = false; render(); }, 3000); }
+  function ord(n) { var s = ['th', 'st', 'nd', 'rd'], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); }
+
+  function render() {
+    // toolbar
+    sortBtn.setAttribute('aria-pressed', String(state.sort));
+    undoBtn.disabled = history.length === 0;
+    resetAllBtn.textContent = pendingReset ? 'Confirm reset' : 'Reset all';
+    resetAllBtn.classList.toggle('danger-armed', pendingReset);
+    addBtn.disabled = state.teams.length >= MAX_TEAMS;
+    newName.disabled = state.teams.length >= MAX_TEAMS;
+
+    var total = state.teams.reduce(function (a, t) { return a + t.score; }, 0);
+    totalsEl.textContent = state.teams.length + (state.teams.length === 1 ? ' team' : ' teams') + ' · ' + total + (total === 1 ? ' point' : ' points');
+
+    if (!state.teams.length) {
+      grid.innerHTML = '<div class="empty">No teams yet. Add the first one below.</div>';
+      return;
+    }
+
+    var list = state.teams.map(function (t, i) { return { t: t, i: i }; });
+    if (state.sort) list.sort(function (a, b) { return b.t.score - a.t.score || a.i - b.i; });
+    var max = Math.max.apply(null, state.teams.map(function (t) { return t.score; }));
+    var atMax = state.teams.filter(function (t) { return t.score === max; }).length;
+
+    grid.innerHTML = list.map(function (o) {
+      var t = o.t;
+      var rank = 1 + state.teams.filter(function (x) { return x.score > t.score; }).length;
+      var color = COLORS[t.color % COLORS.length];
+      var pill = '';
+      if (max > 0 && t.score === max) pill = '<span class="pill lead">' + (atMax > 1 ? 'Tied' : 'Leading') + '</span>';
+      var removing = pendingRemove === t.id;
+      return '<article class="card" data-id="' + t.id + '" style="--team:' + color + '">' +
+        '<div class="head">' +
+          '<button class="swatch" type="button" data-act="color" aria-label="Change colour for ' + esc(t.name) + '"></button>' +
+          '<input class="name" type="text" value="' + esc(t.name) + '" maxlength="28" aria-label="Team name">' +
+          pill +
+          '<span class="rank">' + ord(rank) + '</span>' +
+        '</div>' +
+        '<div class="score' + (lastChanged === t.id ? ' bump' : '') + '" aria-label="Score">' + t.score + '</div>' +
+        '<div class="controls">' +
+          '<button type="button" data-act="dec" aria-label="Subtract 1 from ' + esc(t.name) + '">−1</button>' +
+          '<button class="plus" type="button" data-act="inc" aria-label="Add 1 to ' + esc(t.name) + '">+1</button>' +
+        '</div>' +
+        '<div class="foot">' +
+          '<button class="link" type="button" data-act="reset">Reset score</button>' +
+          '<button class="link' + (removing ? ' armed' : '') + '" type="button" data-act="remove">' + (removing ? 'Confirm remove' : 'Remove') + '</button>' +
+        '</div>' +
+      '</article>';
+    }).join('');
+    lastChanged = null;
+  }
+
+  function find(id) { return state.teams.filter(function (t) { return t.id === id; })[0]; }
+
+  grid.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-act]');
+    if (!b) return;
+    var card = b.closest('.card');
+    var t = find(card.dataset.id);
+    if (!t) return;
+    var act = b.dataset.act;
+    if (act === 'inc') { snap(); t.score += 1; lastChanged = t.id; }
+    else if (act === 'dec') { snap(); t.score -= 1; lastChanged = t.id; }
+    else if (act === 'reset') { if (t.score !== 0) { snap(); t.score = 0; lastChanged = t.id; } }
+    else if (act === 'color') { t.color = (t.color + 1) % COLORS.length; }
+    else if (act === 'remove') {
+      if (pendingRemove === t.id) {
+        snap();
+        state.teams = state.teams.filter(function (x) { return x.id !== t.id; });
+        pendingRemove = null; clearTimeout(timer);
+      } else { pendingRemove = t.id; pendingReset = false; armTimeout(); }
+    }
+    if (act !== 'remove') pendingRemove = null;
+    save(); render();
+  });
+
+  grid.addEventListener('change', function (e) {
+    if (!e.target.classList.contains('name')) return;
+    var t = find(e.target.closest('.card').dataset.id);
+    if (!t) return;
+    var v = e.target.value.trim();
+    if (!v) { e.target.value = t.name; return; }
+    t.name = v; save();
+  });
+  grid.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && e.target.classList.contains('name')) e.target.blur();
+  });
+
+  sortBtn.addEventListener('click', function () { state.sort = !state.sort; save(); render(); });
+  undoBtn.addEventListener('click', function () {
+    if (!history.length) return;
+    state.teams = JSON.parse(history.pop());
+    pendingRemove = null; save(); render();
+  });
+  resetAllBtn.addEventListener('click', function () {
+    if (!pendingReset) { pendingReset = true; pendingRemove = null; armTimeout(); render(); return; }
+    snap();
+    state.teams.forEach(function (t) { t.score = 0; });
+    pendingReset = false; clearTimeout(timer); save(); render();
+  });
+  addForm.addEventListener('submit', function (e) {
+    e.preventDefault();
+    if (state.teams.length >= MAX_TEAMS) return;
+    var name = newName.value.trim() || ('Team ' + (state.teams.length + 1));
+    snap();
+    state.teams.push({ id: 't' + Date.now().toString(36) + Math.floor(Math.random() * 1000), name: name, score: 0, color: state.teams.length % COLORS.length });
+    newName.value = ''; save(); render();
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>
