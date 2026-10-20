@@ -78,10 +78,15 @@ h1 { margin: 0; font: 700 34px/1 var(--display); letter-spacing: .02em; text-tra
 .score.bump { animation: bump .2s ease-out; }
 @keyframes bump { 40% { transform: scale(1.07); } }
 @media (prefers-reduced-motion: reduce) { .score.bump { animation: none; } }
-.controls { display: grid; grid-template-columns: 1fr 2fr; gap: 8px; }
+.controls { display: grid; grid-template-columns: 1fr; gap: 8px; }
 .controls button { height: 52px; border-radius: 8px; font: 700 22px var(--display); letter-spacing: .03em; border: 1px solid var(--line); background: var(--surface); font-variant-numeric: tabular-nums; }
-.controls .plus { background: var(--team); border-color: var(--team); color: #fff; }
 .controls button:active { transform: translateY(1px); }
+.award { display: flex; gap: 8px; }
+.award input { flex: 1; min-width: 0; height: 60px; border: 2px solid var(--line); background: var(--bg); border-radius: 10px; padding: 0 14px; font: 700 30px var(--display); font-variant-numeric: tabular-nums; -moz-appearance: textfield; appearance: textfield; }
+.award input::-webkit-outer-spin-button, .award input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.award input:focus { outline: none; border-color: var(--team); }
+.award input::placeholder { font: 500 15px var(--body); color: var(--muted); }
+.award button { height: 60px; padding: 0 22px; border: 0; border-radius: 10px; background: var(--team); color: #fff; font-weight: 600; font-size: 16px; }
 .foot { display: flex; justify-content: space-between; }
 .link { background: none; border: 0; color: var(--muted); font-size: 13px; font-weight: 500; padding: 6px 2px; }
 .link:hover { color: var(--fg); }
@@ -130,10 +135,10 @@ h1 { margin: 0; font: 700 34px/1 var(--display); letter-spacing: .02em; text-tra
     return {
       sort: true,
       teams: [
-        { id: 't1', name: 'Falcons', score: 14, color: 0 },
-        { id: 't2', name: 'Otters', score: 11, color: 1 },
-        { id: 't3', name: 'Comets', score: 11, color: 2 },
-        { id: 't4', name: 'Badgers', score: 6, color: 3 }
+        { id: 't1', name: 'Falcons', score: 0, color: 0 },
+        { id: 't2', name: 'Otters', score: 0, color: 1 },
+        { id: 't3', name: 'Comets', score: 0, color: 2 },
+        { id: 't4', name: 'Badgers', score: 0, color: 3 }
       ]
     };
   }
@@ -202,9 +207,12 @@ h1 { margin: 0; font: 700 34px/1 var(--display); letter-spacing: .02em; text-tra
           '<span class="rank">' + ord(rank) + '</span>' +
         '</div>' +
         '<div class="score' + (lastChanged === t.id ? ' bump' : '') + '" aria-label="Score">' + t.score + '</div>' +
+        '<form class="award">' +
+          '<input type="number" inputmode="numeric" step="1" placeholder="Points, e.g. 45" aria-label="Points to add for ' + esc(t.name) + '">' +
+          '<button type="submit">Add</button>' +
+        '</form>' +
         '<div class="controls">' +
-          '<button type="button" data-act="dec" aria-label="Subtract 1 from ' + esc(t.name) + '">−1</button>' +
-          '<button class="plus" type="button" data-act="inc" aria-label="Add 1 to ' + esc(t.name) + '">+1</button>' +
+          '<button type="button" data-act="dec10" aria-label="Deduct 10 from ' + esc(t.name) + '">−10</button>' +
         '</div>' +
         '<div class="foot">' +
           '<button class="link" type="button" data-act="reset">Reset score</button>' +
@@ -224,8 +232,7 @@ h1 { margin: 0; font: 700 34px/1 var(--display); letter-spacing: .02em; text-tra
     var t = find(card.dataset.id);
     if (!t) return;
     var act = b.dataset.act;
-    if (act === 'inc') { snap(); t.score += 1; lastChanged = t.id; }
-    else if (act === 'dec') { snap(); t.score -= 1; lastChanged = t.id; }
+    if (act === 'dec10') { snap(); t.score -= 10; lastChanged = t.id; }
     else if (act === 'reset') { if (t.score !== 0) { snap(); t.score = 0; lastChanged = t.id; } }
     else if (act === 'color') { t.color = (t.color + 1) % COLORS.length; }
     else if (act === 'remove') {
@@ -249,6 +256,18 @@ h1 { margin: 0; font: 700 34px/1 var(--display); letter-spacing: .02em; text-tra
   });
   grid.addEventListener('keydown', function (e) {
     if (e.key === 'Enter' && e.target.classList.contains('name')) e.target.blur();
+  });
+  grid.addEventListener('submit', function (e) {
+    var f = e.target.closest('.award');
+    if (!f) return;
+    e.preventDefault();
+    var t = find(f.closest('.card').dataset.id);
+    if (!t) return;
+    var inp = f.querySelector('input');
+    var n = parseInt(inp.value, 10);
+    if (!isFinite(n) || n === 0) { inp.focus(); return; }
+    snap(); t.score += n; lastChanged = t.id; pendingRemove = null;
+    save(); render();
   });
 
   sortBtn.addEventListener('click', function () { state.sort = !state.sort; save(); render(); });
